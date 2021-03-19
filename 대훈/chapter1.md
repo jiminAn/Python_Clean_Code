@@ -31,4 +31,4 @@
 ## 기본 품질 향상을 위한 도구 설정  
 - Mypy  
 - Pylint  
-- Makefile  
+- Makefile (리눅스 개발 환경)  
