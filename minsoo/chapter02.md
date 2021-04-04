@@ -96,6 +96,12 @@ def my_context_manager():
 
 with my_context_manager() as openen_file:
     print("with line")
+    
+output : 
+open file
+yield line
+with line
+close file
 ```
 ##### -- Contextlib 모듈을 사용하면 보다 쉽게 구현할 수 있음
 ##### -- contextmanager 데코레이터는 적용한 함수의 코드를 컨텍스트 관리자로 변환
