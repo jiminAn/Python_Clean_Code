@@ -79,7 +79,24 @@ with open(filename) as fd:
 - ######  True를 반환하면 예외를 삼킬 수 있으므로 반환하지 않도록 주의해야 함
 
 #### 2.1 컨텍스트 관리자 구현
+```python
+import contextlib
 
+def open_file() :
+    print ("open file")
+
+def close_file() :
+    print ("close file")
+
+@contextlib.contextmanager
+def my_context_manager():
+    open_file()  #with 문에 진입할 때 __enter__ 메서드의 로직
+    yield print("yield line")
+    close_file() #with 문을 탈출할 때 __exit__ 메서드의 로직
+
+with my_context_manager() as openen_file:
+    print("with line")
+```
 ##### -- Contextlib 모듈을 사용하면 보다 쉽게 구현할 수 있음
 ##### -- contextmanager 데코레이터는 적용한 함수의 코드를 컨텍스트 관리자로 변환
 #####  -- Contextlib.contextDecorator 클래스는 with문이 존재하지 않음
@@ -130,33 +147,31 @@ Traceback (most recent call last):
 ##### 프로퍼티는 객체의 어떤 속성에 대한 접근을 제어하려는 경우 사용
 ##### JAVA와 같은 프로그래밍 언어에서는 접근 메서드를 만들지만 파이썬에서는 프로퍼티를 사용
 ``` python
-import re
+class Person:
+    def __init__(self, first_name, last_name, age):
+        self.first_name = first_name
+        self.last_name = last_name
+        self.age = age
+    
+    @property #getter 값을 가져온다
+    def age(self):
+        return self._age
 
-EMAIL_FORMAT = re.compile(r"[^@]+@[^@]+[^@]+")
+    @property
+    def full_name(self):
+        return self.first_name + " " + self.last_name
 
-def is_valid_email(potentially_valid_email: str):
-	return re.match(EMAIL_FORMAT, potentially_valid_email) is not None
+    @age.setter #setter 값을 저장한다;
+    def age(self, age):
+        if age < 0:
+            raise ValueError("Invalid age")
+        self._age = age
 
-class User:
-	def __init__ (self, username):
-	self.username = username
-	self._email = None
-	
-@property # 응답 쿼리
-def email(self):
-	return self._email
-
-@email.setter # 명령 쿼리
-def email(self, new_email):
-	if not is_valid_email(new_email):
-		raise ValueError(f"유효한 이메일이 아니므로 {new_email} 값을 사용할 수 없음")
-	self._email = new_email
->>> u1 = user("jsmith")
->>> u1.email = "jsmith@"
-유효한 이메일이 아니므로 jsmith@ 값을 사용할 수 없음
->>> u1. email = "jsmith@g.co"
->>> u1. email
-'jsmith@g.co'
+person = Person("John","Doe",20)
+print(person.age)
+person.age = person.age + 1
+print(person.age)
+print(person.full_name)
 ```
 
 ##### 프로퍼티는 명령-쿼리 분리 원칙을 따르기 위한 좋은 방법
@@ -212,15 +227,28 @@ class DateRangeIterable:
 # StopIteration 예외가 발생할 때 까지 next()를 호출한다.
 ```
 ``` python
-class DateRangeContainerIterable:
-	 def __init__(self, start_date, end_date):
-		 self.start_date = start_date
-		 self.end_date = end_date
-	 def __iter__(self):
-		 current_day = self.start_date
-		 while current_day < self.end_date:
-			 yield current_day
-			 current_day += timedelta(days=1)
+from datetime import timedelta 
+from datetime import date
+
+class DateRangeIterable:
+
+    def __init__ (self, start_date, end_date):
+        self.start_date = start_date
+        self.end_date = end_date
+        self._present_day = start_date
+    
+    def __iter__(self):
+        current_day = self.start_date
+        while current_day < self.end_date:
+            yield current_day
+            current_day += timedelta(days=1)
+
+
+r1 = DateRangeIterable(date(2019,1,1), date(2019,1,5))
+print("_ ".join(map(str, r1)))
+#'구분자'.join(리스트) 매개변수로 들어온 리스트에 있는 요소 하나하나를 합쳐서 하나의 문자열로 바꾸어 반환하는 함수
+# map(함수,리스트) 리스트의 요소를 지정된 함수로 처리해준다.
+print(max(r1))
 ```
 ##### 컨테이너 이터러블(container iterable)
 #### 4.2 시퀀스 만들기
@@ -231,29 +259,29 @@ class DateRangeContainerIterable:
 
 ##### 시퀀스는 메모리를 많이 사용하지만 시간복잡도는 O(1) 
 ```python
-class DateRangeSequence:
-	def __init__(self, start_date, end_date):
-		self.start_date = start_date
-		self.end_date = end_date
-		self._range = self._create_range()
+from datetime import timedelta 
+from datetime import date
 
-	def _create_range(self):
-		days = []
-		current_day = self.start_date
-		while current_day < self.end_date:
-			days.append(current_day)
-			current_day += timedelta(days=1)
-		return days
-	
-	def __getitem__(self, day_no):
-		return self._range[day_no]
-	
-	def __len__(self):
-		return len(self._range)
+class DateRangeIterable:
+    
+    def __init__(self, start_date, end_date):
+        self.start_date = start_date
+        self.end_date = end_date
+        self._range = self._create_range()
 
->>> s1 = DateRangeSequence(date(2019, 1, 1), date(2019, 1, 5))
->>> for day in s1:
-		print(day)
+    def _create_range(self):
+        days = []
+        current_day = self.start_date
+        while current_day < self.end_date:
+            days.append(current_day)
+            current_day += timedelta(days=1)
+        return days
+
+    def __getitem__(self, day_no):
+        return self._range[day_no]
+
+    def __len__(self):
+        return len(self._range)
 ```
 - ##### DateRangeSequence 객체가 모든 작업을 래핑된 객체인 리스트에 위임하기 때문에 호환성과 일관성을 유지할 수 있음.
 
@@ -266,32 +294,61 @@ class DateRangeSequence:
 ##### Element in container 🡪 container.__contain__(element)
 
 ``` python
+#__contain__ 메서드는 일반적으로 Boolean 값을 반환
+#__contain__ 메서드는 파이썬에서 in 키워드가 발견될 때 호출된다.
+
+from collections import Container
+
 class Boundaries:
-	def __init__(self, width, height):
-		self.width = width
-		self.height = height
-	
-	def __contains__(self, coord):
-		x, y = coord
-		return 0 <= x < self.width and 0 <= y < self. height
+    def __init__ (self, width, height):
+        self.width = width
+        self.height = height
+
+    def __contains__(self, coord):
+        x, y = coord
+        return 0 <= x < self.width and 0 <= y < self.height
 
 class Grid:
-	def __init__ (self, width, height):
-		self.width = width
-		self.height = height
-		self.limits = Boundaries(width, height)
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+        self.limit = Boundaries(width, height)
 
-	def __contains__(self, coord):
-		return coord in self.limits
+    def __contains__(self, coord):
+        return coord in self.limit
 
-def mark_coordinate(gird, coord):
-	if coord in grid:
-		grid[coord] = MARKED
+def mark_coordinate(grid, coord):
+    if coord in grid:
+        print("coord in limit")
+    else:
+        print("coord not in limit")
+
+grid = Grid(100,100)
+coord1 = (3,4)
+coord2 = (101,101)
+mark_coordinate(grid, coord1)
+mark_coordinate(grid, coord2)
 		
 ```
 ### 06. 객체의 동적인 속성
 ---
+```python
+class DynamicAttributes:
+    def __init__ (self, attribute):
+        self.attribute = attribute
 
+    def __getattr__ (self, attr):
+        if attr.startswith("fallback_"): # str.startswith() 괄호 안에 적은 문자열로 시작하는지를 확인합니다. True or False
+            name = attr.replace("fallback_", "") # replace("찾을값","바꿀값",[바꿀횟수])
+            return f"[fallback resolved] {name}"
+        raise AttributeError(f"{self.__class__.__name__}에는 {attr} 속성이 없음. ")
+
+dyn = DynamicAttributes("value")
+print(dyn.attribute)
+print(dyn.fallback_test)
+dyn.__dict__["fallback_new"] = "new value"
+
+```
 ##### __ getattr__ 매직 메서드를 사용해 객체에서 속성을 얻는 방법을 제어할 수 있음.
 
 ##### < myobject >.< myattribute >를 호출하면 파이썬은 객체의 사전에서 < myattribute >를 찾고
@@ -308,25 +365,26 @@ def mark_coordinate(gird, coord):
 
 ##### 객체를 파라미터가 있는 함수처럼 사용하거나 정보를 기억하는 함수처럼 사용할 경우 유용
 ```python
-from collections import defaultdict
+# 함수처럼 동작하는 객체 
+# object(*args, **kwargs) --> object.__call__(*args, **kwargs)
 
-class Callcount:
+from collections import defaultdict # 외부함수이기 때문에 import 해야한다.
 
-	def __init__(self):
-		self._counts = defaultdict(int)
-#defaultdict key값이 없을 경우 미리 지정해 놓은 초기값을 반환하는 dictionary이다.
-	def __call__(self, argument):
-		self._counts[argument] += 1
-		return self._counts[argument]
+class CallCount:
 
->>> cc = Callcount()
->>> cc(1)
-1
->>> cc(2)
-2   
->>> cc("something")
-1 
-# 동일한 값으로 몇 번호출 되었는지 반환하는 객체
+    def __init__(self):
+        self._counts = defaultdict(int)
+#   defaultdict(<class 'int'>, {}) 디폴트값이 int인 딕셔너리
+    def __call__(self, argument):
+        self._counts[argument] += 1
+        return self._counts[argument]
+
+cc = CallCount()
+print(cc(1)) #객체를 함수처럼 사용할 수 있다.
+print(cc(2))
+print(cc(1))
+print(cc(1))
+print(cc("something"))
 ```
 ### 08. 파이썬에서 유의할 점
 ---
