@@ -193,15 +193,10 @@ class Serialization:
         event_class.serialize = serialze_method
         return event_class
       
-@Serialization(
-    username = show_original,
-    password = hide_field,
-    ip = show_original,
-    timestamp = format_time,
-)
 ```
 
 ```python
+@Serialization(username = show_original,password = hide_field,ip = show_original,timestamp = format_time) # 확인
 class LoginEvent:
   def __init__(self, username, password, ip, timestamp):
     ... # username,password,ip초기화
@@ -258,7 +253,7 @@ class LoginEvent:
 
 - 간접 참조(indirection)을 통해 새로운 레벨의 중첩 함수 생성
 - 데코레이터를 위한 클래스 생성
-  - 첫 번 째 방법보다 가독성이 좋음
+  - 첫 번째 방법보다 가독성이 좋음
 
 방법 1: **중첩 함수의 데코레이터**
 
@@ -292,7 +287,7 @@ class LoginEvent:
         for _ in range(retries_limit):
           ...#try...excecp e문
         raise last_raised
-        return wrapped
+      return wrapped
       
     return retry
   ```
@@ -400,6 +395,9 @@ def process_account(account_id):
 
 function 파라미터 함수를 래핑하는 것이라고 알려주도록 코드 수정
 
+- docstring에 포함된 단위 테스트 기능이 복구 됨
+- `wraps` 데코레이터를 사용해 `__wrapped__` 속성을 통해 수정되지 않은 원본에도 접근할 수 있게 됨
+
 ```python
 def trace_decorator(function):
   @wraps(function) # function 파라미터 함수를 래핑하는 것을 알려주는 코드
@@ -413,6 +411,267 @@ def process_account(account_id):
   """id별 계정 처리"""
   logger.info("%s 계정 처리", account_id)
 ```
+
+
+
+일반적인 데코레이터의 경우 아래와 같은 구조에 따라 `functools.wraps` 를 추가하면 됨
+
+```python
+def decorator(original_fuction):
+  @wraps(original_fuction)
+  def decorated_fuction(*args, **kwargs):
+    # 데코레이터에 의한 수정 작업 ...
+    return original_fuction(*args, **kwargs)
+  return decorated_function
+```
+
+
+
+### 데코레이터 부작용 처리
+
+데코레이터의 부작용을 허용하는 경우도 있으나 의심이 된다면 원칙에 따라 그렇게 하지 않기로 결정 해야 함. 즉 데코레이터의 부작용을 최소화하는 방법에 대해 알아보자
+
+1. 데코레이터 부작용의 잘못된 처리
+
+   - 래핑된 함수 바깥에 추가 로직을 구현하는 것이 바람직하지 않은 예
+
+   ```python
+   # function execution & logging the execution time
+   def traced_function_wrong(function):
+     logger.info("%s function execution")
+     start_time = time.time()
+     
+     @functools.wraps(function)
+     def wrapped(*args, **kwargs):
+       result = function(*args, *kwargs)
+       logger.info(
+       	"function %s \'s execuation time", function, time.time() - start_time
+       )
+       return result
+    return wrapped
+   ```
+
+   ```python
+   @traced_function_wrong
+   def process_with_delay(callback, delay=0):
+     time.sleep(delay)
+     return callback()
+   ```
+
+   일반 함수에서 위 데코레이터를 적용하면 문제없이 작동하나 아래와 같이 중요한 버그가 존재
+
+   - `process_with_delay`함수를 import만 해도 로그가 실행됨
+   - `@traced_function_wrong` 은 `process_with_delay = traced_function_wrong(process_with_delay)`로 즉, 해당 문장은 모듈을 import 할 때마다 실행되게 됨
+
+   
+
+   이는 아래와 같이 수정하면 위의 버그들을 해결할 수 있다
+
+   ```python
+   def traced_function(function):
+     @functools.wraps(function)
+     
+     def wrapped(*args, **kwargs):
+       logger.info("%s 함수 실행", function.__qualnale__)
+       start_time = time.time()
+       result = function(*args, *kwargs)
+       logger.info(
+         "function %s took %.2fs",
+         function.__qualname__,
+         time.time() - start_time
+       )
+       return result
+    return wrapped
+   ```
+
+   
+
+2. 데코레이터 부작용의 활용 
+
+   이러한 부작용을 의도적으로 사용하여 실제 실행이 가능한 시점까지 기다리지 않는 경우도 있음
+
+   - 많은 웹 프레임워크나 널리 알려진 라이브러리들은 이 원리로 객체를 노출하거나 활용하고 있음
+   - 데코레이터는 래핑된 객체를 변경하지도, 동작 방식을 수정하지도 않고 원래 함수 그대로를 반환
+   - **래핑된 객체를 일부 수정하거나 수정하는 내부 함수를 정의했다고 해도 결과 객체를 외부에 노풀하는 코드가 있어야 함**
+     - 결과 객체가 같은 클로저에 있지 않고 외부 스코프에 있음
+     - 데코레이팅한 것만으로 스스로 결과 객체에 저장됨
+
+   
+
+   예:) 모듈의 공용 레지스트리에 객체를 등록하는 경우
+
+   - 이전 이벤트 시스템에서 일부 이벤트만 사용하려는 경우를 살펴보자
+
+     - 이벤트 계층 구조의 중간에 가상의 클래스를 만들고 일부 파생 클래스에 대해서만 이벤트를 처리하도록 할 수 있음
+     - 각 클래스마다 처리 여부에 플래그 표시를 하는 대신에 데코레이터를 사용해 명시적으로 표시 할 수 있음
+
+     ```python
+     EVENTS_REGISTRY = {}
+     
+     def register_event(event_cls):
+       """모듈에서 접근 가능하도록 이벤트 클래스를 레지스트리에 등록"""
+       EVENTS_REGISTRY[event_cls.__name__] = event_cls
+       return event_cls
+     
+     class Event:
+       """기본 이벤트 객체"""
+       
+     class UserEvent:
+       TYPE = "user"
+       
+     @register_event  
+     class UserLoginEvent(UserEvent):
+       """사용자가 시스템에 접근했을 때 발생하는 이벤트"""
+     
+     @register_event
+     class UserLogoutEvent(UserEvent):
+       """사용자가 시스템에서 나갈 때 발생하는 이벤트"""
+     ```
+
+
+
+### 어느 곳에서나 동작하는 데코레이터 만들기
+
+데코레이터를 만들 때 재사용을 고려하여 함수 뿐 아니라 메서드에서도 동작하길 바람
+
+- `*args`, `*kwargs` 서명을 사용하여 데코레이터를 정의하면 모든 경우에 사용할 수 있음
+- 단, 원래 함수의 서명과 비슷하게 데코레이터를 정의하는 것이 좋은 경우가 있음
+  - 원래 함수와 모양이 비슷하기 때문에 가독성이 좋음
+  - 파라미터를 받아서 뭔가를 하려면 `*args`, `*kwargs` 를 사용하는 것이 불편함
+
+
+
+예:) 문자열을 받아서 빈번히 드라이버 객체를 초기화하는 경우 -> 파라미터를 변환해주는 데코레이터를 만들어 중복 제거 가능
+
+```python
+import logging
+from functools import wraps
+
+logger = logging.getLogger(__name__)
+
+class DBDriver:
+  def __init__(self, dbstring):
+    self.dbstring = dbstring
+    
+  def execute(self, query):
+    return f"{self.dbstring} 에서 쿼리{query} 실행"
+
+def inject_db_driver(function):
+  """DB에서 dns 문자열을 받아서 DBDriver 인스턴스를 생성하는 데코레이터"""
+  @wraps(function)
+  def wrapped(dbstring):
+    return function(DBDriver(dbstring))
+  return wrapped
+
+@inject_db_driver
+def run_query(driver):
+  return driver.execute("test_function")
+  
+```
+
+- 이 경우 같은 기능을 하는 데코레이터를 클래스 메서드에 재사용할 경우 동작하지 않는다
+
+  ```python
+  class DataHandler:
+    @inject_db_driver
+    def run_query(self, driver):
+      return driver.execute(self.__class__.__name__)
+  ```
+
+  - 클래스 메서드의 `self`라는 추가 변수를 항상 첫 번째 파라미터로 받게 되어 있음
+
+    - 따라서 하나의 파라미터만 받도록 설계된 이 데코레이터는 연결 문자열 자리에  `self`를 전달
+    - 두 번째 파라미터에는 아무것도 전달하지 않아 에러가 발생하게 됨
+
+  - 해결법: 메서드와 함수에 대해서 동일하게 동작하는 데코레이터를 만들기
+
+    - 데코레이터를 클래스 객체로 구현하고 `__get__` 메서드를 구현한 디스크립터 객체 만들기
+      - 디스크립터에 대한 자세한 내용은 6장에서 다룸
+      - 호출할 수 있는 객체를 메서드에 다시 바인딩한다는 정도만 알고 지나가기 
+
+    ```python
+    from functools import wraps
+    from types import  MethodType
+    
+    class inject_db_driver:
+      """문자열을 DBDriver 인스턴스로 변환하여 래핑된 함수로 전달"""
+      def __init__(self, funciton):
+        self.function = function
+        wraps(self.function)(self)
+        
+      def __call__(self,dbstring):
+        return self.function(DBDriver(dbstring))
+    
+      def __get__(self,instance, owner):
+        if instance is None:
+          return self
+        return self.__class__(MethodType(self.function, instance))
+      
+    ```
+
+
+
+
+
+
+
+## 데코레이터와 DRY 원칙
+
+------
+
+### DRY : Do not Repeat Yourself
+
+- 소스 코드에서 동일한 코드를 반복하지 마라
+
+1. 처음부터 데코레이터를 만들지 않는다
+
+   : 패턴이 생기고 데코레이터에 대한 추상화가 명확해지면 그 때 리펙토링을 한다
+
+2. 데코레이터가 적어도 3회 이상 필요한 경우에만 구현한다
+
+3. 데코레이터 코드를 최소한으로 유지한다
+
+
+
+## 데코레이터와 관심사의 분리
+
+------
+
+코드 재사용의 핵심은 응집력 있는 컴포넌트를 만드는 것
+
+- 최소한의 책임을 가져서 오직 한 가지 일만 해야하며 그 일을 잘해야 함
+
+- 컴포넌트가 작을 수록 재사용성이 높아진다
+
+- 결합과 종속성을 유발하고 SW의 유연성을 떨어트리는 추가 동작이 필요없이 여러 상황에서 쓰일 수 있음
+
+
+
+## 좋은 데코레이터의 분석
+
+------
+
+### 훌륭한 데코레이터가 갖추어야 할 특성
+
+- 캡슐화와 관심사의 분리
+  - 좋은 데코레이터는 실제로 하는일과 데코레이팅하는 일의 책임을 명확히 구분해야 함
+  - 데코레이터의 클라이언트 블랙박스 모드로 동작해야 함
+- 독립성
+  - 데코레이터가 하는 일은 독립적이어야 함
+  - 데코레이팅되는 객체와 최대한 분리되어야 함
+- 재사용성
+  - 여러 유형에 적용 가능한 형태가 바람직함
+  - 충분히 범용적이어야 함
+
+
+
+
+
+
+
+
+
+
 
 
 
