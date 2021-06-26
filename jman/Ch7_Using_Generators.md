@@ -16,8 +16,6 @@
 
 
 
-
-
 ## 기술적 요구사항
 
 ------
@@ -45,7 +43,7 @@
 대규모의 구매 정보에서 최저 판매가, 최고 판매가, 평균 판매가를 구한다고 해보자. 파일은 아래와 같이 두 개의 필드만 가진 csv file이다
 
 ```
-<purchase_data>, <csv>
+<purchase_data>, <price>
 ```
 
 구매 상태 클래스는 아래와 같다. 해당 객체는 구매 정보를 받아서 필요한 계산을 하게 된다
@@ -99,21 +97,6 @@ class PurchasesStats:
         )
 
 
-def _load_purchases(filename):
-    purchases = []
-    with open(filename) as f:
-        for line in f:
-            *_, price_raw = line.partition(",")
-            purchases.append(float(price_raw))
-
-    return purchases
-
-
-def load_purchases(filename):
-    with open(filename) as f:
-        for line in f:
-            *_, price_raw = line.partition(",")
-            yield float(price_raw)
 ```
 
 이 모든 정보를 로드해서 어딘가에 담아서 반환해주는 함수를 만들어보자
@@ -163,7 +146,7 @@ def load_purchases(filename):
 >>> (x**2 for x in range(10))
 <generator object <genexpr> at 0x...>
 
->>> sum(x**2 for x in range(10))
+>>> sum(x**2 for x in range(10)) 
 285
 ```
 
@@ -173,7 +156,9 @@ def load_purchases(filename):
 
 ------
 
- 파이썬에서 반복 시 유용하게 사용할 수 있는 관용적인 코드를 살펴보도록 하자 아래는 시작 값을 입력하면 무한 시퀀스를 만드는 단순한 역할을 하는 객체를 두 가지 버전으로 작성한 코드이다
+ 파이썬에서 반복 시 유용하게 사용할 수 있는 관용적인 코드를 살펴보도록 하자 
+
+아래는 시작 값을 입력하면 무한 시퀀스를 만드는 단순한 역할을 하는 객체를 두 가지 버전으로 작성한 코드이다
 
 ### 관용적인 반복 코드
 
@@ -248,7 +233,7 @@ class SequenceOfNumbers:
 
       가장 좋은 방법은 중첩을 풀어서 1차원 루프로 만드는 것이다
 
-      - 보고 제너레이터를 사용해 반복을 추상화한다
+      - 보조 제너레이터를 사용해 반복을 추상화한다
 
         ```python
         def _iterator_array2d(array2d):
@@ -260,7 +245,7 @@ class SequenceOfNumbers:
           try:
             coord = next(
               coord
-              for (coor, cell) in _iterator_array2d(array)
+              for (coord, cell) in _iterator_array2d(array)
               if cell == desired_value
             )
           except StopIteration:
@@ -273,3 +258,101 @@ class SequenceOfNumbers:
         
 
 ### 파이썬의 이터레이터 패턴
+
+이터레이터는  `__iter__()` 와 `__next__()` 매직 메서드를 구현한 객체이다. 일반적으로 이렇게 구현을 하나, 항상 이 두 가지를 구현해야하는 것은 아니다. 해당 장에서는   `__iter__()` 를 구현한 이터러블 객체와 `__next__()` 를 구현한 이터레이터 객체를 비교해보도록 하자 또한 시퀀스와 컨테이너 객체의 반복에 대해서 알아보자
+
+#### 1. 이터레이션의 인터페이스
+
+- 이터러블 vs 이터레이터? 이터러블은 반복을 지원하는 객체로, 이를 실제 반복할 때 이터레이터를 사용한다
+  - 즉,  `__iter__()` 를 통해 이터레이터를 반환,  `__next__()` 를 통해 반복 로직을 구현
+
+- 모즌 제너레이터는 이터레이터이다 
+  - 이터레이터는 단지 next() 함수 호출 시 일련의 값에 대해 한 번에 하나씩만 어떻게 생성하는지 알고 있는지 객체임
+
+- 이터레이션의 인터페이스
+
+  | 파이썬 개념 | 매직 메서드  | 비고                                                         |
+  | ----------- | ------------ | ------------------------------------------------------------ |
+  | Iterable    | `__iter__()` | 이터레이터와 함께 반복 로직 생성, 이터러블은 `for ... in ...` 구문에서 사용 가능 |
+  | Iterator    | `__next__()` | 한 번에 하나씩 값을 생산하는 로직을 정의, 더 이상 생산값이 없을 경우 `StopIteration` 예외 발생, 내장 next( ) 함수 사용해 하나씩 값 읽어올 수 있음 |
+
+- 이터러블 하지 않은 이터레이터 객체의 예
+
+  - 시퀀스에서 하나씩 값을 가져올 수는 있으나 무한 루프를 유발하므로 반복은 불가
+
+  ```python
+  class SequenceIterator:
+    def __init__(self, start = 0, step = 1):
+      self.current = start
+      self.strp = step
+      
+    def __next__(self):
+      value = self.current
+      self.current += self.step 
+      return value
+  ```
+
+#### 2. 이터러블이 가능한 시퀀스 객체
+
+- `for` loop에서 사용 가능한 형태
+
+  -  `__iter__()` 메서드를 구현한 객체
+  - 객체가 시퀀스인 경우
+    -  즉, `__getitem__()`,   `__len__()` 매직 메서드를 구현한 경우 
+    - 이 경우 인터프리터는 IndexError 예외가 발생할 때까지 순서대로 값을 제공함
+
+- map() 을 구현한 시퀀스 객체 예제
+
+  ```python
+  class MappedRange:
+    """특정 숫자 범위에 대해 맵으로 변환"""
+    def __init__(self, transformation, start, end):
+      self._transformation = transformation
+      self._wrapped = range(start, end)
+      
+    # 인스턴스 변수에 직접 접근하지 않고 객체 자체를 통해서 슬라이싱을 구현할 수 있음
+    def __getitem__(self, idx): 
+      value = self._wrapped.__getitem__(idx)
+      result = self._transformation(value)
+      logger.info("Index %d: %s", idx, result)
+      return result
+    
+    def __len__(self):
+      return len(self._wrapped)
+    
+  ```
+
+- 위와 같은 방법으로, `__iter__()` 가 구현되어 있지 않아도 for  루프를 사용해 반복가능하나, 대부분의 경우는 단순히 반복 가능한 객체를 만드는 것이 아니라 적절한 시퀀스를 만들어 해결하는 것이 바람직하다
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
